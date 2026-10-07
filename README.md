@@ -4,68 +4,47 @@
 
 This is a completed personal research and learning project. The goal was to evaluate and document a sustainable, open-source log analysis setup that is maintainable, reproducible, and deployable with Docker — built on existing platforms rather than from scratch.
 
+The lab has two complementary tracks:
+
+- **Wazuh** — SIEM-style detection, custom rules, alert validation
+- **Grafana stack** — observability (Loki logs + Prometheus metrics) for exploring the same kinds of sample datasets
+
 Outcomes of this lab:
 
-- Compared common open-source log analysis / SIEM-related tools and selected Wazuh as the primary platform
-- Deployed Wazuh locally with Docker Compose (single-node)
-- Ingested public sample datasets (SSH and Apache access logs)
-- Wrote and validated custom detection rules for web scanning and login brute-force patterns
+- Compared common open-source log analysis / SIEM-related tools
+- Deployed Wazuh locally with Docker Compose (single-node) and wrote custom detection rules
+- Deployed a Grafana + Loki + Alloy + Prometheus stack and explored sample logs in Grafana Explore
+- Practiced with public sample datasets (SSH and Apache / host logs)
 
-## Lab Setup
+## Repo layout
 
-- Wazuh single-node stack via the official `wazuh-docker` repository (Docker Compose)
-- Wazuh version used in this lab: 4.12.0
-- Dashboard served locally over HTTPS (default Docker single-node ports)
-- Credentials: use your own values; do not commit real passwords
+| Path | Contents |
+|------|----------|
+| [`Wazuh/`](Wazuh/) | Beginner guide + custom local rules (Nikto / Hydra) |
+| [`Grafana/`](Grafana/) | Docker Compose observability stack + beginner guide |
 
-For step-by-step setup, see [`Wazuh/WAZUH_BEGINNER_GUIDE.md`](Wazuh/WAZUH_BEGINNER_GUIDE.md).
+## Lab guides
 
-## Wazuh Docker Setup
-
-Single-node deployment typically includes three containers:
-
-- Wazuh manager — log analysis engine and threat detection
-- Wazuh indexer — OpenSearch-based storage
-- Wazuh dashboard — web UI
-
-Container names may vary by Compose project name; confirm with `docker ps`.
-
-### Useful Docker commands
-
-```bash
-# From the wazuh-docker single-node directory
-
-# Start Wazuh
-docker compose up -d
-
-# Stop Wazuh
-docker compose down
-
-# Check container status
-docker compose ps
-
-# Copy a file into the manager container
-docker cp <local_file> <manager_container_name>:<container_path>
-
-# Run a command inside the manager container
-docker exec -i <manager_container_name> <command>
-```
+- Wazuh setup: [`Wazuh/WAZUH_BEGINNER_GUIDE.md`](Wazuh/WAZUH_BEGINNER_GUIDE.md)
+- Grafana stack setup: [`Grafana/GRAFANA_BEGINNER_GUIDE.md`](Grafana/GRAFANA_BEGINNER_GUIDE.md)
 
 ## Tools Evaluated
 
 | Tool | Category | Licence | Notes |
 |---|---|---|---|
-| Wazuh | SIEM / XDR | GPLv2 (free) | Primary platform for this project |
+| Wazuh | SIEM / XDR | GPLv2 (free) | Primary SIEM / detection platform for this project |
+| Grafana + Loki (+ Alloy / Prometheus) | Observability | AGPLv3 (Grafana/Loki) | Hands-on log + metrics lab (see `Grafana/`) |
 | ELK Stack | Log Management / SIEM | SSPL + Elastic License | Alternative to compare |
 | Graylog | Log Management | SSPL | Complementary log management |
-| Grafana + Loki | Observability | AGPLv3 | Performance / log observability |
 | Security Onion | NSM / SIEM | GPLv2 | Possible future upgrade path |
 | OpenObserve | Observability | AGPLv3 | Observability complement |
 | Varonis | Data Security (commercial) | Proprietary | Compared for context only (not a SIEM substitute) |
 
-**Key finding:** Wazuh was the best fit for this lab. Among the free options reviewed, it covers SIEM-style detection, FIM, vulnerability-related features, and compliance content in one stack. Commercial data-security platforms (e.g. Varonis) overlap more with UEBA / data access governance than with full SIEM replacement.
+**Key finding:** Wazuh was the best fit for detection / SIEM-style work. Grafana + Loki is a strong companion for log search and metrics dashboards, but it is not a drop-in replacement for Wazuh’s rule engine and security alerting. Commercial data-security platforms (e.g. Varonis) overlap more with UEBA / data access governance than with full SIEM replacement.
 
 ## Architecture
+
+### Wazuh (detection)
 
 ```
 Log sources (hosts, apps, network devices)
@@ -79,28 +58,86 @@ Wazuh Indexer (OpenSearch — storage & search)
 Wazuh Dashboard (web UI — alerts, dashboards)
 ```
 
-In this lab, no agents were deployed. Sample log files were ingested directly into the manager container for testing.
+In the Wazuh lab phase, no agents were deployed. Sample log files were ingested directly into the manager container for testing.
+
+### Grafana stack (observability)
+
+```
+Sample log files (./Grafana/logs)
+        ↓
+Grafana Alloy (collector / parser)
+        ↓
+Loki (log storage)          Prometheus ← node-exporter
+        ↓                              ↓
+              Grafana UI (Explore / dashboards)
+```
+
+## Wazuh Docker Setup
+
+Single-node deployment typically includes three containers:
+
+- Wazuh manager — log analysis engine and threat detection
+- Wazuh indexer — OpenSearch-based storage
+- Wazuh dashboard — web UI
+
+Container names may vary by Compose project name; confirm with `docker ps`.
+
+Version used in this lab: **Wazuh 4.12.0**. Dashboard is served locally over HTTPS (default Docker single-node ports). Use your own credentials; do not commit real passwords.
+
+### Useful Docker commands
+
+```bash
+# From the wazuh-docker single-node directory
+
+docker compose up -d
+docker compose down
+docker compose ps
+docker cp <local_file> <manager_container_name>:<container_path>
+docker exec -i <manager_container_name> <command>
+```
+
+## Grafana stack setup
+
+The observability lab lives under [`Grafana/`](Grafana/) and includes:
+
+- **Loki** — log storage
+- **Alloy** — reads local sample logs and pushes them to Loki
+- **Prometheus** + **node-exporter** — host metrics
+- **Grafana** — UI on `http://localhost:3000`
+
+Quick start (details in the beginner guide):
+
+```bash
+cd Grafana
+# Place sample logs under ./logs (not committed to git)
+docker compose up -d
+# Open http://localhost:3000  (lab default: admin / admin)
+```
+
+Config files in that folder (`docker-compose.yml`, `loki-config.yml`, `prometheus.yml`, `alloy/config.alloy`, Grafana datasource provisioning) define how the containers run and connect — not the dashboards themselves.
 
 ## Sample Datasets
 
 ### LogPAI Loghub — OpenSSH_2k.log
 
 - About 2,000 lines of SSH logs
-- Purpose: test detection around SSH login and brute-force style activity
-- Typical path inside the manager: `/var/ossec/logs/OpenSSH_2k.log`
+- Used with Wazuh (manager ingest) and optionally with Grafana/Loki via Alloy
+- Purpose: explore SSH login / brute-force style activity
 
-### AIT Log Data Set v1.1 — Apache access logs
+### AIT Log Data Set v1.1 — Apache / host logs
 
-- Public simulation dataset (Apache access log from a webmail-style service)
-- Focus day used for testing: `2020-03-04`
-- Ground-truth labels mark attack-related lines (benign vs attack types)
-- Useful attack patterns in this lab:
+- Public simulation dataset (`mail.insect.com` and related logs)
+- Focus day used for Wazuh rule testing: `2020-03-04`
+- Useful attack patterns:
   - **Nikto** — web vulnerability scanner; User-Agent contains `Nikto/`
-  - **Hydra** — login brute-force / credential guessing; User-Agent contains `Mozilla/5.0 (Hydra)` and repeated hits on a login path
+  - **Hydra** — login brute-force; User-Agent contains `Mozilla/5.0 (Hydra)`
+- Also mounted into the Grafana stack under `Grafana/logs/mail.insect.com/` for Explore queries
 
-## Custom Detection Rules
+Large raw log folders are **not** stored in this repository. Download datasets locally and place them where each guide describes.
 
-Custom rules used in this lab live under [`Wazuh/`](Wazuh/):
+## Custom Detection Rules (Wazuh)
+
+Custom rules live under [`Wazuh/`](Wazuh/):
 
 | Rule ID | Level | Match | Purpose |
 |---|---|---|---|
@@ -118,27 +155,29 @@ See also [`Wazuh/local_rules.xml`](Wazuh/local_rules.xml) and [`Wazuh/ait_lab_ru
 ## What Was Completed
 
 1. Researched and compared several open-source log analysis / SIEM-related tools
-2. Documented comparison findings and selected Wazuh as the primary platform
+2. Documented comparison findings; selected Wazuh for detection and Grafana/Loki for observability practice
 3. Deployed Wazuh single-node with Docker Compose
 4. Ingested the LogPAI OpenSSH sample dataset into the Wazuh manager
-5. Prepared an AIT Apache access-log slice for a single attack day and matched sample lines to ground-truth labels (Nikto, Hydra)
-6. Wrote custom local rules for Nikto and Hydra User-Agent patterns
-7. Validated detections with `wazuh-logtest` and dashboard replay
+5. Prepared an AIT Apache access-log slice and matched sample lines to ground-truth labels (Nikto, Hydra)
+6. Wrote and validated custom local rules with `wazuh-logtest` and dashboard replay
+7. Deployed Grafana + Loki + Alloy + Prometheus and explored sample logs in Grafana Explore
 
 ## Key Terminology
 
 - **SIEM:** Security Information and Event Management — collect logs, detect threats, raise alerts
+- **Observability stack:** Tools for storing and exploring logs/metrics (here: Loki, Prometheus, Grafana)
 - **Agent:** Software on a monitored host that collects and forwards logs
 - **Decoder:** Tells Wazuh how to parse a log format
 - **Rule:** Defines suspicious behaviour and the alert to raise
 - **FIM:** File Integrity Monitoring — detects file changes
 - **UEBA:** User and Entity Behaviour Analytics — abnormal user/device behaviour
-- **Telemetry pipeline:** Collects, filters, and routes logs before analysis (e.g. Fluent Bit, Logstash)
+- **Telemetry pipeline:** Collects, filters, and routes logs before analysis (e.g. Alloy, Fluent Bit, Logstash)
+- **LogQL:** Loki query language used in Grafana Explore for log search
 
 ## Notes
 
-- Wazuh Indexer = OpenSearch bundled with Wazuh
-- Wazuh Dashboard = OpenSearch Dashboards with the Wazuh plugin
+- Wazuh Indexer = OpenSearch bundled with Wazuh; Wazuh Dashboard = OpenSearch Dashboards with the Wazuh plugin
 - OpenSearch is an Elasticsearch fork (Apache 2.0)
 - SSPL (used by some ELK/Graylog offerings) is not OSI-approved open source
-- This document describes a personal lab setup; it is not a production deployment guide
+- Grafana lab default password in Compose is for local learning only
+- This repository documents a personal lab setup; it is not a production deployment guide

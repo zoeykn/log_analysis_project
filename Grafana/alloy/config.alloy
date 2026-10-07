@@ -1,0 +1,131 @@
+// Sample logs at logs/ root (e.g. OpenSSH_2k.log)
+local.file_match "samples" {
+  path_targets = [{"__path__" = "/var/log/samples/*.log", "job" = "logs"}]
+  sync_period  = "5s"
+}
+
+loki.source.file "samples" {
+  targets    = local.file_match.samples.targets
+  forward_to = [loki.write.default.receiver]
+}
+
+// AIT Log Data Set v1 — mail.insect.com
+local.file_match "ait" {
+  path_targets = [{
+    "__path__" = "/var/log/samples/mail.insect.com/**/*",
+    "job"      = "ait-mail-insect",
+    "host"     = "mail.insect.com",
+  }]
+  sync_period = "5s"
+}
+
+discovery.relabel "ait" {
+  targets = local.file_match.ait.targets
+
+  // Skip huge/binary artifacts
+  rule {
+    source_labels = ["__path__"]
+    regex         = ".*(audit\\.zip|eve\\.json)$"
+    action        = "drop"
+  }
+
+  // Nested dirs: apache2, suricata, exim4, audit
+  rule {
+    source_labels = ["__path__"]
+    regex         = ".*/mail\\.insect\\.com/(apache2|suricata|exim4|audit)/.*"
+    target_label  = "log_type"
+    replacement   = "$1"
+  }
+
+  // Root files with extension: auth.log, mail.info, ...
+  rule {
+    source_labels = ["__path__"]
+    regex         = ".*/mail\\.insect\\.com/([^/]+)\\.(log|info)$"
+    target_label  = "log_type"
+    replacement   = "$1"
+  }
+
+  // Root files without extension: syslog, messages
+  rule {
+    source_labels = ["__path__"]
+    regex         = ".*/mail\\.insect\\.com/(syslog|messages)$"
+    target_label  = "log_type"
+    replacement   = "$1"
+  }
+}
+
+loki.source.file "ait" {
+  targets    = discovery.relabel.ait.output
+  forward_to = [loki.process.ait.receiver]
+}
+
+loki.process "ait" {
+  forward_to = [loki.write.default.receiver]
+
+  // Apache access/error: [29/Feb/2020:00:08:30 +0000]
+  stage.match {
+    selector = "{log_type=\"apache2\"}"
+
+    stage.regex {
+      expression = "\\[(?P<ts>\\d{2}/\\w{3}/\\d{4}:\\d{2}:\\d{2}:\\d{2} [+-]\\d{4})\\]"
+    }
+
+    stage.timestamp {
+      source = "ts"
+      format = "02/Jan/2006:15:04:05 -0700"
+    }
+  }
+
+  // Syslog-style without year (auth, daemon, mail, user, syslog, messages)
+  stage.match {
+    selector = "{log_type=~\"auth|daemon|mail|user|syslog|messages\"}"
+
+    stage.regex {
+      expression = "^(?P<ts_raw>\\w{3}\\s+\\d{1,2}\\s+\\d{2}:\\d{2}:\\d{2})"
+    }
+
+    stage.template {
+      source   = "ts"
+      template = "2020 {{ .ts_raw }}"
+    }
+
+    stage.timestamp {
+      source = "ts"
+      format = "2006 Jan _2 15:04:05"
+    }
+  }
+
+  // Suricata fast.log: 02/29/2020-01:05:15.685652
+  stage.match {
+    selector = "{log_type=\"suricata\"}"
+
+    stage.regex {
+      expression = "^(?P<ts>\\d{2}/\\d{2}/\\d{4}-\\d{2}:\\d{2}:\\d{2}\\.\\d+)"
+    }
+
+    stage.timestamp {
+      source = "ts"
+      format = "01/02/2006-15:04:05.999999"
+    }
+  }
+
+  // Exim mainlog: 2020-02-29 00:11:40
+  stage.match {
+    selector = "{log_type=\"exim4\"}"
+
+    stage.regex {
+      expression = "^(?P<ts>\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2})"
+    }
+
+    stage.timestamp {
+      source = "ts"
+      format = "2006-01-02 15:04:05"
+    }
+  }
+}
+
+loki.write "default" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}

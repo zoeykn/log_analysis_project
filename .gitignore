@@ -1,0 +1,21 @@
+# Wazuh Docker SSL certs (if present locally)
+single-node/config/wazuh_indexer_ssl_certs/*.pem
+single-node/config/wazuh_indexer_ssl_certs/*.key
+multi-node/config/wazuh_indexer_ssl_certs/*.pem
+multi-node/config/wazuh_indexer_ssl_certs/*.key
+
+# Grafana lab: keep config, ignore local sample datasets
+Grafana/logs/**
+!Grafana/logs/.gitkeep
+!Grafana/logs/samples/
+!Grafana/logs/samples/.gitkeep
+
+# Secrets / env
+.env
+.env.*
+*.pem
+*.key
+
+# OS
+Thumbs.db
+Desktop.ini
