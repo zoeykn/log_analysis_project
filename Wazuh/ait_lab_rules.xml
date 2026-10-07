@@ -1,0 +1,14 @@
+
+<rule id="100301" level="10">
+  <if_sid>31100</if_sid>
+  <match>Nikto/</match>
+  <description>AIT lab: Nikto web scan in Apache access log</description>
+  <group>web_scan,recon,</group>
+</rule>
+
+<rule id="100302" level="10">
+  <if_sid>31100</if_sid>
+  <match>Mozilla/5.0 (Hydra)</match>
+  <description>AIT lab: Hydra brute-force tool in Apache access log</description>
+  <group>authentication_failed,brute_force,</group>
+</rule>
